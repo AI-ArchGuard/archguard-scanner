@@ -1,15 +1,15 @@
 # ArchGuard Scanner
 
-ArchGuard 的确定性 Java 源码、字节码、依赖图和架构规则分析器。
+ArchGuard 的确定性代码分析平面。第一版深度扫描 Java，但公共模型、规则接口和结果契约保持语言无关。
 
 ## 当前状态
 
-M0 仓库基线已建立，Scanner 工程骨架和扫描契约尚未初始化。
+阶段 0 `v0.1.0-foundation` 正在远端收口。本交付只建立 Apache-2.0 许可证和基础 CI 门禁；Maven 工程、扫描契约、CLI、Java parser、规则引擎和合成样例尚未发布，当前不能声称具备扫描能力。下一交付单元是 Scanner S1 构建与五模块边界，阶段规范见 [archguard-docs](https://github.com/AI-ArchGuard/archguard-docs/blob/main/requirements/scanner-v0.2-feature-spec.md)。
 
 ## 职责
 
-- 解析 Java 源码、字节码及依赖关系，构建可重复的分析图。
-- 执行循环依赖、禁止依赖等确定性架构规则。
+- 把 Java 源码与工程结构映射为语言无关的 Artifact、Component、Dependency、Metric、Finding 和 Evidence。
+- 执行非法包依赖、分层、循环、Controller→Repository、跨模块内部类、禁止组件、复杂度和必要注解等确定性规则。
 - 发布稳定、版本化且与 Platform 内部实现无关的 ScanRequest/ScanResult 契约。
 - 为正常、违规、循环和失败场景维护黄金样例与性能基线。
 
@@ -28,11 +28,15 @@ M0 仓库基线已建立，Scanner 工程骨架和扫描契约尚未初始化。
 
 ## 本地验证
 
-当前基线可执行：
+当前 Foundation 基线可执行：
 
 ```bash
 git diff --check
 git status --short
 ```
 
-初始化 Maven Wrapper 后运行 `./mvnw verify`；Windows 使用 `.\mvnw.cmd verify`。契约和黄金测试尚未建立，因此当前不能声称扫描验证已通过。
+Maven Wrapper 将由 S1 引入；契约、解析、规则、CLI 与黄金测试将在后续切片分步加入。
+
+## 许可证
+
+本仓库采用 [Apache License 2.0](LICENSE)。
