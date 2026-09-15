@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "0.1.0",
+  "project": {
+    "id": "project_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "identity": "example/order-service",
+    "name": "order-service",
+    "language": "java",
+    "repositoryPath": ".",
+    "extensions": {}
+  },
+  "artifacts": [
+    {
+      "id": "artifact_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "projectId": "project_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "kind": "java-class",
+      "name": "OrderController",
+      "language": "java",
+      "repositoryPath": "src",
+      "qualifiedName": "example.order.OrderController",
+      "extensions": {}
+    }
+  ],
+  "components": [],
+  "dependencies": [],
+  "metrics": [],
+  "findings": [],
+  "evidences": []
+}
