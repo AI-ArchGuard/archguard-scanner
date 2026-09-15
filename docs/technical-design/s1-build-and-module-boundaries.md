@@ -1,6 +1,6 @@
 # S1 Technical Design：构建与模块边界
 
-- 状态：Implemented locally（远端验收待完成）
+- 状态：Accepted（PR 与合并后 `main` 的托管 CI 均通过）
 - 日期：2026-09-10
 - 对应需求：`archguard-docs/requirements/scanner-v0.2-feature-spec.md`
 - 对应阶段：阶段 1，切片 S1
@@ -73,3 +73,5 @@ Maven Enforcer 在 `validate` 阶段再次对每个模块执行 Java/Maven 版�
 - `ReactorArchitectureTest`：3 tests，0 failures，0 errors，0 skipped。
 - Maven Enforcer：Java/Maven 版本、依赖收敛、重复依赖声明和禁止依赖规则全部通过。
 - Windows 脚本沿用 Platform 已验证的 `.m2` 符号链接目标空值保护；不改变 Maven 分发地址或 SHA-256 校验。
+- PR 验收：[`#6`](https://github.com/AI-ArchGuard/archguard-scanner/pull/6)，`governance` 与 `build` 均通过。
+- `main` 验收：提交 `d938df49180db3b68b9a6a9b3efdc4c417262353`，运行 [`34930184377`](https://github.com/AI-ArchGuard/archguard-scanner/actions/runs/34930184377) 成功。

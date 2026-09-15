@@ -4,7 +4,7 @@ ArchGuard 的确定性代码分析平面。第一版深度扫描 Java，但公�
 
 ## 当前状态
 
-阶段 0 `v0.1.0-foundation` 已通过七仓库远端验收并正式关闭，当前进入阶段 1 `v0.2.0-scanner`。S1 已在本地建立并验证 Java 21/Maven Wrapper 聚合构建、五模块骨架、依赖禁用门禁和反应堆架构测试，但仍待托管 CI 验收；在此之前不启用 S2。统一模型与 JSON Schema、CLI、Java parser、规则引擎和合成样例尚未实现，当前不能声称具备扫描能力。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，S1 设计见 [`docs/technical-design/s1-build-and-module-boundaries.md`](docs/technical-design/s1-build-and-module-boundaries.md)。
+阶段 0 `v0.1.0-foundation` 已通过七仓库远端验收并正式关闭，当前处于阶段 1 `v0.2.0-scanner`。S1 已完成 Java 21/Maven Wrapper 聚合构建、五模块骨架、依赖禁用门禁和反应堆架构测试，并通过 PR 与合并后 `main` 的托管 CI 验收。下一切片是 S2 统一模型与 `0.1.0` JSON Schema。CLI、Java parser、规则引擎和合成样例尚未实现，当前不能声称具备扫描能力。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，S1 设计见 [`docs/technical-design/s1-build-and-module-boundaries.md`](docs/technical-design/s1-build-and-module-boundaries.md)。
 
 ## 职责
 
