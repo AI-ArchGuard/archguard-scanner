@@ -44,8 +44,7 @@ class JavaSourceScannerTest {
                         "com.example.Repository",
                         "com.example.Service",
                         "com.example.Service.Nested",
-                        "com.example.Status",
-                        "com.example.target.TargetPackage"),
+                        "com.example.Status"),
                 components.keySet());
         assertEquals(
                 Set.of("class"), components.get("com.example.Service").extensions().get("java.declaration-kind").stream().collect(Collectors.toSet()));
@@ -159,6 +158,21 @@ class JavaSourceScannerTest {
         assertEquals("java.encoding.invalid", result.diagnostics().getFirst().code());
         assertEquals("src/main/java/example/BrokenEncoding.java", result.diagnostics().getFirst().path());
         assertEquals("Java source is not valid UTF-8", result.diagnostics().getFirst().message());
+    }
+
+    @Test
+    void acceptsTargetAsAJavaPackageDirectory(@TempDir Path repository) throws IOException {
+        Path source = repository.resolve("src/main/java/example/target/TargetPackage.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(repository.resolve("pom.xml"), "<project/>");
+        Files.writeString(source, "package example.target; public final class TargetPackage {}");
+
+        JavaScanResult result = scanner.scan(JavaScanRequest.forSchema010(repository, "target-package", "Target Package"));
+
+        assertEquals(
+                Set.of("example.target.TargetPackage"),
+                result.components().stream().map(Component::qualifiedName).collect(Collectors.toSet()));
+        assertTrue(result.diagnostics().isEmpty());
     }
 
     @Test
