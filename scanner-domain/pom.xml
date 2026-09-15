@@ -13,4 +13,12 @@
   <artifactId>scanner-domain</artifactId>
   <name>ArchGuard Scanner Domain</name>
   <description>Language-neutral scanner model and ports</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
 </project>

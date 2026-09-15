@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "0.1.0",
+  "project": {
+    "id": "project_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "identity": "example/order-service",
+    "name": "order-service",
+    "language": "java",
+    "repositoryPath": ".",
+    "extensions": {}
+  },
+  "artifacts": [],
+  "components": [],
+  "dependencies": [],
+  "metrics": [],
+  "findings": [],
+  "evidences": [
+    {
+      "id": "evidence_1111111111111111111111111111111111111111111111111111111111111111",
+      "kind": "reference",
+      "summary": "Invalid range.",
+      "location": {
+        "path": "src/Order.java",
+        "startLine": 10,
+        "startColumn": 4,
+        "endLine": 9,
+        "endColumn": 2
+      },
+      "extensions": {}
+    }
+  ]
+}

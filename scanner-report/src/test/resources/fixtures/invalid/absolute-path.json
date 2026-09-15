@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "0.1.0",
+  "project": {
+    "id": "project_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "identity": "example/order-service",
+    "name": "order-service",
+    "language": "java",
+    "repositoryPath": "C:/Users/example/order-service",
+    "extensions": {}
+  },
+  "artifacts": [],
+  "components": [],
+  "dependencies": [],
+  "metrics": [],
+  "findings": [],
+  "evidences": []
+}
