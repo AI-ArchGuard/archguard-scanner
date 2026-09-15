@@ -77,6 +77,28 @@ class ReactorArchitectureTest {
                 "scanner-domain must remain free of production dependencies during S1");
     }
 
+    @Test
+    void parserImplementationDoesNotLeakIntoDomainOrReportSources() throws Exception {
+        for (String module : List.of("scanner-domain", "scanner-report")) {
+            Path sourceRoot = reactorRoot().resolve(module).resolve("src/main/java");
+            try (var files = Files.walk(sourceRoot)) {
+                List<Path> leakedSources = files.filter(Files::isRegularFile)
+                        .filter(path -> path.toString().endsWith(".java"))
+                        .filter(path -> containsParserReference(path))
+                        .toList();
+                assertTrue(leakedSources.isEmpty(), () -> module + " leaks JavaParser types: " + leakedSources);
+            }
+        }
+    }
+
+    private static boolean containsParserReference(Path path) {
+        try {
+            return Files.readString(path).contains("com.github.javaparser");
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot inspect Java source boundary", exception);
+        }
+    }
+
     private static Map<String, List<String>> expectedDependencies() {
         Map<String, List<String>> expected = new LinkedHashMap<>();
         expected.put("scanner-domain", List.of());
