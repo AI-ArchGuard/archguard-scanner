@@ -4,7 +4,7 @@ ArchGuard 的确定性代码分析平面。第一版深度扫描 Java，但公�
 
 ## 当前状态
 
-阶段 0 `v0.1.0-foundation` 正在远端收口。本交付只建立 Apache-2.0 许可证和基础 CI 门禁；Maven 工程、扫描契约、CLI、Java parser、规则引擎和合成样例尚未发布，当前不能声称具备扫描能力。下一交付单元是 Scanner S1 构建与五模块边界，阶段规范见 [archguard-docs](https://github.com/AI-ArchGuard/archguard-docs/blob/main/requirements/scanner-v0.2-feature-spec.md)。
+阶段 0 `v0.1.0-foundation` 已通过七仓库远端验收并正式关闭，当前进入阶段 1 `v0.2.0-scanner`。S1 已在本地建立并验证 Java 21/Maven Wrapper 聚合构建、五模块骨架、依赖禁用门禁和反应堆架构测试，但仍待托管 CI 验收；在此之前不启用 S2。统一模型与 JSON Schema、CLI、Java parser、规则引擎和合成样例尚未实现，当前不能声称具备扫描能力。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，S1 设计见 [`docs/technical-design/s1-build-and-module-boundaries.md`](docs/technical-design/s1-build-and-module-boundaries.md)。
 
 ## 职责
 
@@ -28,14 +28,19 @@ ArchGuard 的确定性代码分析平面。第一版深度扫描 Java，但公�
 
 ## 本地验证
 
-当前 Foundation 基线可执行：
+完整构建：
 
 ```bash
-git diff --check
-git status --short
+./mvnw --batch-mode --no-transfer-progress verify
 ```
 
-Maven Wrapper 将由 S1 引入；契约、解析、规则、CLI 与黄金测试将在后续切片分步加入。
+Windows 使用：
+
+```powershell
+.\mvnw.cmd --batch-mode --no-transfer-progress verify
+```
+
+当前构建验证五个模块、Java/Maven 版本、依赖收敛、禁止依赖和模块方向。契约、解析、规则、CLI 与黄金测试将在 S2–S7 分步加入。
 
 ## 许可证
 
