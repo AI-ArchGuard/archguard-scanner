@@ -11,12 +11,24 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.AnnotationDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.RecordDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithTypeParameters;
+import com.github.javaparser.ast.stmt.CatchClause;
+import com.github.javaparser.ast.stmt.DoStmt;
+import com.github.javaparser.ast.stmt.ForEachStmt;
+import com.github.javaparser.ast.stmt.ForStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
+import com.github.javaparser.ast.stmt.SwitchEntry;
+import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.TypeParameter;
 import io.github.aiarchguard.scanner.domain.model.Artifact;
@@ -28,6 +40,7 @@ import io.github.aiarchguard.scanner.domain.model.DependencyKind;
 import io.github.aiarchguard.scanner.domain.model.EntityKind;
 import io.github.aiarchguard.scanner.domain.model.Evidence;
 import io.github.aiarchguard.scanner.domain.model.EvidenceKind;
+import io.github.aiarchguard.scanner.domain.model.Metric;
 import io.github.aiarchguard.scanner.domain.model.Project;
 import io.github.aiarchguard.scanner.domain.model.SourceLocation;
 import io.github.aiarchguard.scanner.domain.model.StableIdGenerator;
@@ -40,6 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -52,6 +66,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 final class JavaModelExtractor {
 
@@ -76,6 +91,10 @@ final class JavaModelExtractor {
         Map<String, Artifact> artifactsByModule = artifacts(request, project, discovered.files());
         List<ParsedSource> parsedSources = parseSources(request, discovered, diagnostics);
         List<TypeCandidate> candidates = typeCandidates(request, parsedSources, artifactsByModule);
+        Set<String> knownAnnotations = candidates.stream()
+                .filter(candidate -> candidate.declaration() instanceof AnnotationDeclaration)
+                .map(TypeCandidate::qualifiedName)
+                .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
 
         Map<String, List<TypeCandidate>> candidatesByName = new TreeMap<>();
         for (TypeCandidate candidate : candidates) {
@@ -103,6 +122,15 @@ final class JavaModelExtractor {
                     LANGUAGE,
                     candidate.source().file().repositoryPath(),
                     candidate.qualifiedName());
+            Map<String, List<String>> extensions = componentExtensions(
+                    candidate.declaration(),
+                    candidate.source().unit(),
+                    knownAnnotations,
+                    diagnostics,
+                    candidate.source().file().repositoryPath());
+            extensions.put(
+                    "archguard.declaration-evidence-id",
+                    List.of(declarationEvidenceId(request, candidate.location(), candidate.qualifiedName())));
             Component component = new Component(
                     componentId,
                     candidate.artifact().id(),
@@ -111,12 +139,88 @@ final class JavaModelExtractor {
                     LANGUAGE,
                     candidate.qualifiedName(),
                     candidate.location(),
-                    componentExtensions(candidate.declaration(), candidate.source().unit()));
+                    extensions);
             types.add(new TypeInfo(candidate, component));
         }
 
         ResolutionIndex index = new ResolutionIndex(types);
         Map<String, Evidence> evidences = new LinkedHashMap<>();
+        for (TypeInfo type : types) {
+            addDeclarationEvidence(request, type.component(), evidences);
+        }
+        List<Component> functions = new ArrayList<>();
+        List<Metric> metrics = new ArrayList<>();
+        Map<String, BigDecimal> typeComplexities = new LinkedHashMap<>();
+        for (TypeInfo type : types) {
+            BigDecimal typeComplexity = BigDecimal.ZERO;
+            for (CallableDeclaration<?> declaration : callables(type.candidate().declaration())) {
+                String qualifiedName = callableQualifiedName(type.component().qualifiedName(), declaration);
+                SourceLocation callableLocation = location(
+                        type.candidate().source().file().repositoryPath(), declaration);
+                String componentId = StableIdGenerator.generate(
+                        request.schemaVersion(),
+                        request.projectIdentity(),
+                        EntityKind.COMPONENT,
+                        LANGUAGE,
+                        callableLocation.path(),
+                        qualifiedName);
+                Map<String, List<String>> extensions = callableExtensions(
+                        declaration,
+                        type,
+                        knownAnnotations,
+                        diagnostics);
+                extensions.put(
+                        "archguard.declaration-evidence-id",
+                        List.of(declarationEvidenceId(request, callableLocation, qualifiedName)));
+                Component component = new Component(
+                        componentId,
+                        type.component().artifactId(),
+                        ComponentKind.FUNCTION,
+                        callableName(declaration),
+                        LANGUAGE,
+                        qualifiedName,
+                        callableLocation,
+                        extensions);
+                addDeclarationEvidence(request, component, evidences);
+                functions.add(component);
+                if (!isGenerated(component) && !isGenerated(type.component())) {
+                    int complexity = cyclomaticComplexity(declaration, type.candidate().declaration());
+                    typeComplexity = typeComplexity.add(BigDecimal.valueOf(complexity));
+                    metrics.add(metric(request, component.id(), qualifiedName, callableLocation, complexity, evidences));
+                }
+            }
+            if (!isGenerated(type.component())) {
+                typeComplexities.put(type.component().id(), typeComplexity);
+                metrics.add(metric(
+                        request,
+                        type.component().id(),
+                        type.component().qualifiedName(),
+                        type.component().location(),
+                        typeComplexity.intValueExact(),
+                        evidences));
+            }
+        }
+        for (Artifact artifact : artifactsByModule.values()) {
+            int complexity = types.stream()
+                    .filter(type -> type.component().artifactId().equals(artifact.id()))
+                    .map(type -> typeComplexities.getOrDefault(type.component().id(), BigDecimal.ZERO))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .intValueExact();
+            SourceLocation moduleLocation = types.stream()
+                    .filter(type -> type.component().artifactId().equals(artifact.id()))
+                    .map(type -> type.component().location())
+                    .sorted(Comparator.comparing(SourceLocation::path)
+                            .thenComparingInt(SourceLocation::startLine)
+                            .thenComparingInt(SourceLocation::startColumn))
+                    .findFirst()
+                    .orElse(new SourceLocation(
+                            ".".equals(artifact.repositoryPath()) ? "pom.xml" : artifact.repositoryPath() + "/pom.xml",
+                            1,
+                            1,
+                            1,
+                            1));
+            metrics.add(metric(request, artifact.id(), artifact.qualifiedName(), moduleLocation, complexity, evidences));
+        }
         Map<EdgeKey, EdgeAccumulator> edges = new TreeMap<>(EDGE_ORDER);
         for (TypeInfo type : types.stream().sorted(Comparator.comparing(info -> info.component().id())).toList()) {
             extractDependencies(request, type, index, evidences, edges);
@@ -125,11 +229,21 @@ final class JavaModelExtractor {
         List<Dependency> dependencies = edges.values().stream()
                 .map(edge -> edge.toDependency(request))
                 .toList();
+        MavenFactExtractor.Facts mavenFacts =
+                new MavenFactExtractor().extract(request, project, artifactsByModule, diagnostics);
+        List<Component> components = new ArrayList<>();
+        components.addAll(types.stream().map(TypeInfo::component).toList());
+        components.addAll(functions);
+        components.addAll(mavenFacts.components());
+        List<Dependency> allDependencies = new ArrayList<>(dependencies);
+        allDependencies.addAll(mavenFacts.dependencies());
+        mavenFacts.evidences().forEach(evidence -> evidences.putIfAbsent(evidence.id(), evidence));
         return new JavaScanResult(
                 project,
-                List.copyOf(artifactsByModule.values()),
-                types.stream().map(TypeInfo::component).toList(),
-                dependencies,
+                mavenFacts.artifacts(),
+                components,
+                allDependencies,
+                metrics,
                 List.copyOf(evidences.values()),
                 diagnostics);
     }
@@ -319,7 +433,11 @@ final class JavaModelExtractor {
     }
 
     private static Map<String, List<String>> componentExtensions(
-            TypeDeclaration<?> declaration, CompilationUnit unit) {
+            TypeDeclaration<?> declaration,
+            CompilationUnit unit,
+            Set<String> knownAnnotations,
+            List<JavaParseDiagnostic> diagnostics,
+            String repositoryPath) {
         Map<String, List<String>> extensions = new TreeMap<>();
         extensions.put("java.declaration-kind", List.of(declarationKind(declaration)));
         extensions.put(
@@ -338,7 +456,255 @@ final class JavaModelExtractor {
         extensions.put(
                 "java.nesting",
                 List.of(declaration.getParentNode().orElse(null) instanceof CompilationUnit ? "top-level" : "member"));
+        addAnnotationFacts(
+                extensions, declaration.getAnnotations(), unit, knownAnnotations, diagnostics, repositoryPath);
         return extensions;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static List<CallableDeclaration<?>> callables(TypeDeclaration<?> owner) {
+        List<CallableDeclaration<?>> result = new ArrayList<>();
+        for (CallableDeclaration<?> declaration : owner.findAll(CallableDeclaration.class)) {
+            if (nearestType(declaration).map(owner::equals).orElse(false)) {
+                result.add(declaration);
+            }
+        }
+        result.sort(Comparator.comparingInt((CallableDeclaration<?> declaration) ->
+                        location(".", declaration).startLine())
+                .thenComparing(declaration -> callableQualifiedName("", declaration)));
+        return List.copyOf(result);
+    }
+
+    private static String callableName(CallableDeclaration<?> declaration) {
+        return declaration instanceof ConstructorDeclaration ? "<init>" : declaration.getNameAsString();
+    }
+
+    private static String callableQualifiedName(String owner, CallableDeclaration<?> declaration) {
+        String parameters = declaration.getParameters().stream()
+                .map(parameter -> parameter.getType().asString().replaceAll("\\s+", "")
+                        + (parameter.isVarArgs() ? "..." : ""))
+                .collect(java.util.stream.Collectors.joining(","));
+        return owner + "#" + callableName(declaration) + "(" + parameters + ")";
+    }
+
+    private static Map<String, List<String>> callableExtensions(
+            CallableDeclaration<?> declaration,
+            TypeInfo owner,
+            Set<String> knownAnnotations,
+            List<JavaParseDiagnostic> diagnostics) {
+        Map<String, List<String>> extensions = new TreeMap<>();
+        extensions.put(
+                "java.declaration-kind",
+                List.of(declaration instanceof ConstructorDeclaration ? "constructor" : "method"));
+        extensions.put("java.owner-component-id", List.of(owner.component().id()));
+        extensions.put(
+                "java.package",
+                List.of(owner.component().extensions().get("java.package").getFirst()));
+        List<String> modifiers = declaration.getModifiers().stream()
+                .map(Modifier::getKeyword)
+                .map(Modifier.Keyword::asString)
+                .sorted()
+                .toList();
+        if (!modifiers.isEmpty()) {
+            extensions.put("java.modifiers", modifiers);
+        }
+        addAnnotationFacts(
+                extensions,
+                declaration.getAnnotations(),
+                owner.candidate().source().unit(),
+                knownAnnotations,
+                diagnostics,
+                owner.candidate().source().file().repositoryPath());
+        return extensions;
+    }
+
+    private static void addAnnotationFacts(
+            Map<String, List<String>> extensions,
+            List<AnnotationExpr> annotations,
+            CompilationUnit unit,
+            Set<String> knownAnnotations,
+            List<JavaParseDiagnostic> diagnostics,
+            String repositoryPath) {
+        Set<String> resolved = new TreeSet<>();
+        boolean complete = true;
+        for (AnnotationExpr annotation : annotations) {
+            Optional<String> annotationName = resolveAnnotation(annotation.getNameAsString(), unit, knownAnnotations);
+            if (annotationName.isPresent()) {
+                resolved.add(annotationName.orElseThrow());
+            } else {
+                complete = false;
+                SourceLocation location = location(repositoryPath, annotation);
+                diagnostics.add(new JavaParseDiagnostic(
+                        "java.annotation.unresolved",
+                        repositoryPath,
+                        location.startLine(),
+                        location.startColumn(),
+                        "annotation name could not be resolved deterministically"));
+            }
+        }
+        if (!resolved.isEmpty()) {
+            extensions.put("java.annotations", List.copyOf(resolved));
+        }
+        extensions.put("java.annotation-resolution", List.of(complete ? "complete" : "incomplete"));
+        if (resolved.stream().anyMatch(JavaModelExtractor::isGeneratedAnnotation)) {
+            extensions.put("java.generated", List.of("true"));
+        }
+    }
+
+    private static Optional<String> resolveAnnotation(
+            String rawName, CompilationUnit unit, Set<String> knownAnnotations) {
+        if (rawName.contains(".")) {
+            return Optional.of(rawName);
+        }
+        for (ImportDeclaration imported : unit.getImports()) {
+            if (imported.isStatic() || imported.isAsterisk()) {
+                continue;
+            }
+            String importedName = imported.getNameAsString();
+            if (importedName.endsWith("." + rawName)) {
+                return Optional.of(importedName);
+            }
+        }
+        String packageName = unit.getPackageDeclaration()
+                .map(value -> value.getNameAsString())
+                .orElse("");
+        String samePackage = packageName.isEmpty() ? rawName : packageName + "." + rawName;
+        if (knownAnnotations.contains(samePackage)) {
+            return Optional.of(samePackage);
+        }
+        String javaLang = "java.lang." + rawName;
+        if (isKnownExternalAnnotation(javaLang)) {
+            return Optional.of(javaLang);
+        }
+        List<String> wildcardMatches = unit.getImports().stream()
+                .filter(imported -> !imported.isStatic() && imported.isAsterisk())
+                .map(imported -> imported.getNameAsString() + "." + rawName)
+                .filter(candidate -> knownAnnotations.contains(candidate) || isKnownExternalAnnotation(candidate))
+                .distinct()
+                .sorted()
+                .toList();
+        return wildcardMatches.size() == 1 ? Optional.of(wildcardMatches.getFirst()) : Optional.empty();
+    }
+
+    private static boolean isKnownExternalAnnotation(String name) {
+        return switch (name) {
+            case "org.springframework.stereotype.Controller",
+                    "org.springframework.web.bind.annotation.RestController",
+                    "org.springframework.stereotype.Repository",
+                    "org.springframework.stereotype.Service",
+                    "javax.annotation.Generated",
+                    "javax.annotation.processing.Generated",
+                    "jakarta.annotation.Generated",
+                    "java.lang.Deprecated",
+                    "java.lang.Override",
+                    "java.lang.SafeVarargs",
+                    "java.lang.SuppressWarnings",
+                    "java.lang.FunctionalInterface" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isGeneratedAnnotation(String name) {
+        return "javax.annotation.Generated".equals(name)
+                || "javax.annotation.processing.Generated".equals(name)
+                || "jakarta.annotation.Generated".equals(name);
+    }
+
+    private static boolean isGenerated(Component component) {
+        return component.extensions().getOrDefault("java.generated", List.of()).contains("true");
+    }
+
+    private static int cyclomaticComplexity(CallableDeclaration<?> declaration, TypeDeclaration<?> owner) {
+        int value = 1;
+        value += count(declaration, owner, IfStmt.class);
+        value += count(declaration, owner, ForStmt.class);
+        value += count(declaration, owner, ForEachStmt.class);
+        value += count(declaration, owner, WhileStmt.class);
+        value += count(declaration, owner, DoStmt.class);
+        value += count(declaration, owner, CatchClause.class);
+        value += count(declaration, owner, ConditionalExpr.class);
+        value += (int) declaration.findAll(SwitchEntry.class).stream()
+                .filter(entry -> belongsTo(entry, declaration, owner))
+                .filter(entry -> !entry.getLabels().isEmpty())
+                .count();
+        value += (int) declaration.findAll(BinaryExpr.class).stream()
+                .filter(expression -> belongsTo(expression, declaration, owner))
+                .filter(expression -> expression.getOperator() == BinaryExpr.Operator.AND
+                        || expression.getOperator() == BinaryExpr.Operator.OR)
+                .count();
+        return value;
+    }
+
+    private static <T extends Node> int count(
+            CallableDeclaration<?> declaration, TypeDeclaration<?> owner, Class<T> type) {
+        return (int) declaration.findAll(type).stream()
+                .filter(node -> belongsTo(node, declaration, owner))
+                .count();
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static boolean belongsTo(Node node, CallableDeclaration<?> declaration, TypeDeclaration<?> owner) {
+        return node.findAncestor(CallableDeclaration.class).map(declaration::equals).orElse(false)
+                && nearestType(node).map(owner::equals).orElse(false);
+    }
+
+    private static String declarationEvidenceId(
+            JavaScanRequest request, SourceLocation location, String qualifiedName) {
+        return StableIdGenerator.generate(
+                request.schemaVersion(),
+                request.projectIdentity(),
+                EntityKind.EVIDENCE,
+                LANGUAGE,
+                location.path(),
+                qualifiedName + "|declaration");
+    }
+
+    private static void addDeclarationEvidence(
+            JavaScanRequest request, Component component, Map<String, Evidence> evidences) {
+        String evidenceId = declarationEvidenceId(request, component.location(), component.qualifiedName());
+        evidences.putIfAbsent(evidenceId, new Evidence(
+                evidenceId,
+                EvidenceKind.DECLARATION,
+                "Declaration of " + component.qualifiedName(),
+                component.location(),
+                Map.of()));
+    }
+
+    private static Metric metric(
+            JavaScanRequest request,
+            String scopeId,
+            String scopeName,
+            SourceLocation location,
+            int value,
+            Map<String, Evidence> evidences) {
+        String evidenceName = scopeName + "|complexity.cyclomatic|" + value;
+        String evidenceId = StableIdGenerator.generate(
+                request.schemaVersion(),
+                request.projectIdentity(),
+                EntityKind.EVIDENCE,
+                LANGUAGE,
+                location.path(),
+                evidenceName);
+        evidences.putIfAbsent(evidenceId, new Evidence(
+                evidenceId,
+                EvidenceKind.METRIC,
+                "Cyclomatic complexity for " + scopeName + " is " + value,
+                location,
+                Map.of()));
+        String metricId = StableIdGenerator.generate(
+                request.schemaVersion(),
+                request.projectIdentity(),
+                EntityKind.METRIC,
+                LANGUAGE,
+                location.path(),
+                scopeName + "|complexity.cyclomatic");
+        return new Metric(
+                metricId,
+                scopeId,
+                "complexity.cyclomatic",
+                BigDecimal.valueOf(value),
+                "count",
+                Map.of("archguard.evidence-id", List.of(evidenceId)));
     }
 
     private static String declarationKind(TypeDeclaration<?> declaration) {

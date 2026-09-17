@@ -67,6 +67,28 @@ final class FindingFactory {
                 Map.of("archguard.graph-scope", List.of(scope.wireValue())));
     }
 
+    static Finding custom(
+            RuleInput input,
+            RuleReference rule,
+            Severity severity,
+            String subjectId,
+            Collection<String> evidenceIds,
+            String violation,
+            List<String> identityParts,
+            String message,
+            Map<String, List<String>> extensions) {
+        return create(
+                input,
+                rule,
+                severity,
+                subjectId,
+                evidenceIds,
+                violation,
+                identityParts,
+                message,
+                extensions);
+    }
+
     private static Finding create(
             RuleInput input,
             RuleReference rule,

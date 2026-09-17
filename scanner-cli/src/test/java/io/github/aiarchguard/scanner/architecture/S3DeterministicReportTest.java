@@ -39,7 +39,7 @@ class S3DeterministicReportTest {
                 result.artifacts(),
                 result.components(),
                 result.dependencies(),
-                List.of(),
+                result.metrics(),
                 List.of(),
                 result.evidences());
     }

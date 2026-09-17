@@ -44,7 +44,11 @@ final class LayeredArchitectureRule {
     }
 
     private static int layerIndex(Component component, LayeredArchitectureConfig config) {
-        String packageName = ComponentFacts.packageName(component);
+        var packageNameValue = ComponentFacts.optionalPackageName(component);
+        if (packageNameValue.isEmpty()) {
+            return -1;
+        }
+        String packageName = packageNameValue.orElseThrow();
         int match = -1;
         for (int index = 0; index < config.layers().size(); index++) {
             ArchitectureLayer layer = config.layers().get(index);

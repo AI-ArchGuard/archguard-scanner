@@ -13,8 +13,13 @@ final class IllegalPackageDependencyRule {
         Map<String, Component> components = input.componentIndex();
         List<Finding> findings = new ArrayList<>();
         for (Dependency dependency : input.dependencies()) {
-            String sourcePackage = ComponentFacts.packageName(components.get(dependency.sourceId()));
-            String targetPackage = ComponentFacts.packageName(components.get(dependency.targetId()));
+            var sourcePackageValue = ComponentFacts.optionalPackageName(components.get(dependency.sourceId()));
+            var targetPackageValue = ComponentFacts.optionalPackageName(components.get(dependency.targetId()));
+            if (sourcePackageValue.isEmpty() || targetPackageValue.isEmpty()) {
+                continue;
+            }
+            String sourcePackage = sourcePackageValue.orElseThrow();
+            String targetPackage = targetPackageValue.orElseThrow();
             if (sourcePackage.equals(targetPackage)) {
                 continue;
             }

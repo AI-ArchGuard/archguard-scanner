@@ -4,6 +4,7 @@ import io.github.aiarchguard.scanner.domain.model.Artifact;
 import io.github.aiarchguard.scanner.domain.model.Component;
 import io.github.aiarchguard.scanner.domain.model.Dependency;
 import io.github.aiarchguard.scanner.domain.model.Evidence;
+import io.github.aiarchguard.scanner.domain.model.Metric;
 import io.github.aiarchguard.scanner.domain.model.Project;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -17,6 +18,7 @@ public record RuleInput(
         List<Artifact> artifacts,
         List<Component> components,
         List<Dependency> dependencies,
+        List<Metric> metrics,
         List<Evidence> evidences) {
 
     public RuleInput {
@@ -29,6 +31,7 @@ public record RuleInput(
         artifacts = sorted(artifacts, Artifact::id, "artifacts");
         components = sorted(components, Component::id, "components");
         dependencies = sorted(dependencies, Dependency::id, "dependencies");
+        metrics = sorted(metrics, Metric::id, "metrics");
         evidences = sorted(evidences, Evidence::id, "evidences");
 
         Map<String, Artifact> artifactIndex = unique(artifacts, Artifact::id, "rule.input.duplicate-artifact");
@@ -47,7 +50,18 @@ public record RuleInput(
             }
         }
         Map<String, Evidence> evidenceIndex = unique(evidences, Evidence::id, "rule.input.duplicate-evidence");
-        unique(dependencies, Dependency::id, "rule.input.duplicate-dependency");
+        Map<String, Dependency> dependencyIndex =
+                unique(dependencies, Dependency::id, "rule.input.duplicate-dependency");
+        unique(metrics, Metric::id, "rule.input.duplicate-metric");
+        for (Metric metric : metrics) {
+            if (!project.id().equals(metric.scopeId())
+                    && !artifactIndex.containsKey(metric.scopeId())
+                    && !componentIndex.containsKey(metric.scopeId())
+                    && !dependencyIndex.containsKey(metric.scopeId())) {
+                throw new RuleEngineException(
+                        "rule.input.dangling-metric", "metric references an unknown supported scope");
+            }
+        }
         for (Dependency dependency : dependencies) {
             if (!componentIndex.containsKey(dependency.sourceId())
                     || !componentIndex.containsKey(dependency.targetId())) {
@@ -61,6 +75,16 @@ public record RuleInput(
         }
     }
 
+    public RuleInput(
+            String schemaVersion,
+            Project project,
+            List<Artifact> artifacts,
+            List<Component> components,
+            List<Dependency> dependencies,
+            List<Evidence> evidences) {
+        this(schemaVersion, project, artifacts, components, dependencies, List.of(), evidences);
+    }
+
     Map<String, Artifact> artifactIndex() {
         return unique(artifacts, Artifact::id, "rule.input.duplicate-artifact");
     }
@@ -71,6 +95,10 @@ public record RuleInput(
 
     Map<String, Evidence> evidenceIndex() {
         return unique(evidences, Evidence::id, "rule.input.duplicate-evidence");
+    }
+
+    Map<String, Metric> metricIndex() {
+        return unique(metrics, Metric::id, "rule.input.duplicate-metric");
     }
 
     private static <T> List<T> sorted(List<T> values, Function<T, String> id, String field) {
