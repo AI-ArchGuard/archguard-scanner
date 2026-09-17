@@ -111,7 +111,7 @@ final class JavaModelExtractor {
                     LANGUAGE,
                     candidate.qualifiedName(),
                     candidate.location(),
-                    componentExtensions(candidate.declaration()));
+                    componentExtensions(candidate.declaration(), candidate.source().unit()));
             types.add(new TypeInfo(candidate, component));
         }
 
@@ -318,9 +318,15 @@ final class JavaModelExtractor {
         return new SourceLocation(path, range.begin.line, range.begin.column, range.end.line, range.end.column);
     }
 
-    private static Map<String, List<String>> componentExtensions(TypeDeclaration<?> declaration) {
+    private static Map<String, List<String>> componentExtensions(
+            TypeDeclaration<?> declaration, CompilationUnit unit) {
         Map<String, List<String>> extensions = new TreeMap<>();
         extensions.put("java.declaration-kind", List.of(declarationKind(declaration)));
+        extensions.put(
+                "java.package",
+                List.of(unit.getPackageDeclaration()
+                        .map(packageDeclaration -> packageDeclaration.getNameAsString())
+                        .orElse("<default>")));
         List<String> modifiers = declaration.getModifiers().stream()
                 .map(Modifier::getKeyword)
                 .map(Modifier.Keyword::asString)
