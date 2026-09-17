@@ -50,6 +50,8 @@ class JavaSourceScannerTest {
                 Set.of("class"), components.get("com.example.Service").extensions().get("java.declaration-kind").stream().collect(Collectors.toSet()));
         assertEquals(
                 Set.of("member"), components.get("com.example.Service.Nested").extensions().get("java.nesting").stream().collect(Collectors.toSet()));
+        assertEquals(
+                List.of("com.example"), components.get("com.example.Service").extensions().get("java.package"));
 
         assertTrue(hasDependency(result, "com.example.Service", "com.example.Port", DependencyKind.IMPLEMENTS));
         assertTrue(hasDependency(result, "com.example.Service", "com.example.Audit", DependencyKind.DEPENDS_ON));

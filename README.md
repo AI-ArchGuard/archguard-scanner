@@ -4,7 +4,7 @@ ArchGuard 的确定性代码分析平面。第一版深度扫描 Java，但公�
 
 ## 当前状态
 
-阶段 0 `v0.1.0-foundation` 已通过七仓库远端验收并正式关闭，当前处于阶段 1 `v0.2.0-scanner`。S1 的五模块骨架与边界测试、S2 的语言无关模型和 `0.1.0` 契约均已通过 PR 与合并后 `main` CI 验收。S3 已在本地实现 Maven 主源码发现、Java 21 语法解析，以及 Artifact、Component、Dependency、Evidence 和 SourceLocation 提取；最终验收仍以 S3 PR 与合并后 `main` CI 为准。CLI 和规则引擎尚未实现，当前不能声称具备最终用户可执行的完整扫描能力。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，实现设计见 [`docs/technical-design/`](docs/technical-design/)。
+阶段 0 `v0.1.0-foundation` 已通过七仓库远端验收并正式关闭，当前处于阶段 1 `v0.2.0-scanner`。S1 的五模块骨架与边界测试、S2 的语言无关模型和 `0.1.0` 契约、S3 的 Java 静态提取均已通过 PR 与合并后 `main` CI 验收。S4 已在本地实现只读依赖图、非法包依赖、分层架构和依赖循环三条结构规则；最终验收仍以 S4 PR 与合并后 `main` CI 为准。最终用户 CLI 和其余五条规则尚未实现，当前不能声称具备完整扫描能力。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，实现设计见 [`docs/technical-design/`](docs/technical-design/)。
 
 ## 职责
 
@@ -40,7 +40,7 @@ Windows 使用：
 .\mvnw.cmd --batch-mode --no-transfer-progress verify
 ```
 
-当前构建验证五个模块、Java/Maven 版本、依赖收敛、禁止依赖、模块方向、S2 契约，以及 S3 文件发现、解析、映射、路径/资源限制和确定性。`scanner-domain` 保持零生产依赖；Schema 由 `scanner-report` 在 [`scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json`](scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json) 发布。S3 只解析 Maven `src/main/java` 中可由源码确定的项目内类型关系，不执行构建、不下载目标依赖，也不提供完整类型求解。规则、CLI 和项目级黄金测试将在 S4–S7 分步加入。
+当前构建验证五个模块、Java/Maven 版本、依赖收敛、禁止依赖、模块方向、S2 契约、S3 静态提取，以及 S4 依赖图、前三条结构规则、资源上限、Evidence 闭合和端到端字节确定性。`scanner-domain` 保持零生产依赖；`scanner-rule-engine` 生产代码只依赖 `scanner-domain`；Schema 由 `scanner-report` 在 [`scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json`](scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json) 发布。Scanner 只分析 Maven `src/main/java` 中可由源码确定的项目内类型关系，不执行构建、不下载目标依赖，也不提供完整类型求解。外部规则配置、最终用户 CLI、其余规则和项目级黄金样例将在 S5–S7 分步加入。
 
 ## 许可证
 
