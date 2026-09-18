@@ -1,0 +1,9 @@
+version: 0.1.0
+project:
+  identity: io.github.aiarchguard:archguard-scanner
+  name: ArchGuard Scanner
+failOn: critical
+rules:
+  - id: archguard.dependency-cycle
+    parameters:
+      scope: component
