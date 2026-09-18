@@ -18,3 +18,5 @@
 - 为 Java Component 增加 `java.package` 命名空间扩展，并增加图预算、严格强类型配置、稳定 Finding/fingerprint、Evidence 闭合和解析到契约 JSON 的端到端重复性测试；`0.1.0` Schema 保持不变。
 - 实现阶段 1 S5：方法/构造器 Component、限定注解与声明 Evidence、安全 Maven POM 直接依赖、圈复杂度 Metric，以及剩余五条确定性规则。
 - 增加规则 Diagnostic、默认 severity 与允许覆盖边界，并覆盖 Spring 同名注解、模块边界、类型/包/Maven 禁止选择器、复杂度阈值、生成代码、必要注解和 POM 失败关闭测试；`0.1.0` Schema 保持不变且未新增生产依赖。
+- 实现阶段 1 S6：可执行 `scan` CLI、严格且版本化的 YAML 规则配置及参数 Schema、八条规则的强类型映射、稳定 Diagnostic 呈现，以及成功/违规/输入错误/扫描失败四类退出码。
+- 增加输出大小门禁和同目录临时文件原子替换，生成可运行的 shaded JAR，并覆盖配置失败关闭、字节稳定性、Schema、退出码和写入安全测试；Scanner Result `0.1.0` Schema 保持不变。

@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://archguard.dev/contracts/scanner/rules/0.1.0/schema.json",
+  "title": "ArchGuard Scanner Rules 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "project", "rules"],
+  "properties": {
+    "version": { "const": "0.1.0" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "name"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/text" },
+        "name": { "$ref": "#/$defs/text" }
+      }
+    },
+    "failOn": { "$ref": "#/$defs/severity" },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxFiles": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxFileBytes": { "type": "integer", "minimum": 1, "maximum": 104857600 },
+        "maxTotalBytes": { "type": "integer", "minimum": 1, "maximum": 104857600 },
+        "maxDepth": { "type": "integer", "minimum": 4, "maximum": 256 },
+        "maxNodes": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "maxEdges": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "maxFindings": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 104857600 }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/illegalPackageDependency" },
+          { "$ref": "#/$defs/layeredArchitecture" },
+          { "$ref": "#/$defs/dependencyCycle" },
+          { "$ref": "#/$defs/controllerRepositoryAccess" },
+          { "$ref": "#/$defs/internalModuleAccess" },
+          { "$ref": "#/$defs/forbiddenComponent" },
+          { "$ref": "#/$defs/complexityThreshold" },
+          { "$ref": "#/$defs/requiredAnnotation" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000-\\u001F]+$"
+    },
+    "severity": { "enum": ["low", "medium", "high", "critical"] },
+    "packageSelector": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "ruleBaseProperties": {
+      "severity": { "$ref": "#/$defs/severity" }
+    },
+    "illegalPackageDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parameters"],
+      "properties": {
+        "id": { "const": "archguard.illegal-package-dependency" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policies"],
+          "properties": {
+            "policies": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source"],
+                "anyOf": [
+                  { "required": ["allowedTargets"] },
+                  { "required": ["deniedTargets"] }
+                ],
+                "properties": {
+                  "source": { "$ref": "#/$defs/packageSelector" },
+                  "allowedTargets": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/packageSelector" }
+                  },
+                  "deniedTargets": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/packageSelector" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "layeredArchitecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parameters"],
+      "properties": {
+        "id": { "const": "archguard.layered-architecture" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layers"],
+          "properties": {
+            "allowLayerSkipping": { "type": "boolean" },
+            "layers": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "packages"],
+                "properties": {
+                  "name": { "$ref": "#/$defs/text" },
+                  "packages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/packageSelector" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "dependencyCycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parameters"],
+      "properties": {
+        "id": { "const": "archguard.dependency-cycle" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope"],
+          "properties": { "scope": { "enum": ["component", "package", "module"] } }
+        }
+      }
+    },
+    "controllerRepositoryAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "const": "spring.controller-repository-access" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "maxProperties": 0
+        }
+      }
+    },
+    "internalModuleAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parameters"],
+      "properties": {
+        "id": { "const": "archguard.internal-module-access" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["boundaries"],
+          "properties": {
+            "boundaries": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["modulePath", "publicPackages"],
+                "properties": {
+                  "modulePath": { "$ref": "#/$defs/text" },
+                  "publicPackages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/packageSelector" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "forbiddenComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parameters"],
+      "properties": {
+        "id": { "const": "archguard.forbidden-component" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["selectors"],
+          "properties": {
+            "selectors": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["type"],
+                    "properties": { "type": { "$ref": "#/$defs/text" } }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["package"],
+                    "properties": { "package": { "$ref": "#/$defs/packageSelector" } }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["maven"],
+                    "properties": { "maven": { "$ref": "#/$defs/text" } }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "complexityThreshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parameters"],
+      "properties": {
+        "id": { "const": "archguard.complexity-threshold" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "functionThreshold": { "type": "integer", "minimum": 1 },
+            "typeThreshold": { "type": "integer", "minimum": 1 },
+            "moduleThreshold": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "requiredAnnotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parameters"],
+      "properties": {
+        "id": { "const": "archguard.required-annotation" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requirements"],
+          "properties": {
+            "requirements": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["annotation", "componentKinds"],
+                "properties": {
+                  "annotation": { "$ref": "#/$defs/text" },
+                  "componentKinds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": { "enum": ["type", "function"] }
+                  },
+                  "declarationKinds": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/text" }
+                  },
+                  "packages": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": { "$ref": "#/$defs/packageSelector" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

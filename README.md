@@ -4,7 +4,7 @@ ArchGuard 的确定性代码分析平面。第一版深度扫描 Java，但公�
 
 ## 当前状态
 
-阶段 0 `v0.1.0-foundation` 已通过七仓库远端验收并正式关闭，当前处于阶段 1 `v0.2.0-scanner`。S1–S4 已通过 PR 与合并后 `main` CI 验收。S5 已在本地实现函数/注解/Maven 直接依赖/复杂度事实，以及 Spring Controller→Repository、跨模块内部访问、禁止组件、复杂度阈值和必要注解五条规则；最终验收仍以 S5 PR 与合并后 `main` CI 为准。最终用户 CLI、YAML 配置和项目级黄金样例尚未实现，当前不能声称具备完整扫描能力。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，实现设计见 [`docs/technical-design/`](docs/technical-design/)。
+阶段 0 `v0.1.0-foundation` 已通过七仓库远端验收并正式关闭，当前处于阶段 1 `v0.2.0-scanner`。S1–S5 已通过 PR 与合并后 `main` CI 验收。S6 已在本地实现最终用户 CLI、严格 YAML 配置、退出码、Diagnostic 呈现和原子报告写入；最终验收仍以 S6 PR 与合并后 `main` CI 为准。跨仓库合成样例、黄金 digest、性能基线和发布文档属于 S7，当前不能声称 `v0.2.0-scanner` 已发布。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，实现设计见 [`docs/technical-design/`](docs/technical-design/)。
 
 ## 职责
 
@@ -40,7 +40,31 @@ Windows 使用：
 .\mvnw.cmd --batch-mode --no-transfer-progress verify
 ```
 
-当前构建验证五个模块、Java/Maven 版本、依赖收敛、禁止依赖、模块方向、`0.1.0` 契约、Java/Maven 静态事实、八条确定性规则、资源上限、Evidence 闭合和端到端字节确定性。`scanner-domain` 保持零生产依赖；`scanner-rule-engine` 生产代码只依赖 `scanner-domain`；Schema 由 `scanner-report` 在 [`scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json`](scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json) 发布。Scanner 静态分析 Maven `src/main/java` 和 POM 直接非测试依赖，不执行构建、不下载依赖、不解析传递依赖，也不提供完整类型求解。外部规则配置与最终用户 CLI 属于 S6，项目级黄金样例和发布证据属于 S7。
+构建后运行 CLI：
+
+```bash
+java -jar scanner-cli/target/archguard-scanner.jar scan ./my-java-project \
+  --rules ./rules.yaml \
+  --output ./report.json
+```
+
+最小规则文件：
+
+```yaml
+version: 0.1.0
+project:
+  identity: example:application
+  name: Example Application
+failOn: high
+rules:
+  - id: archguard.dependency-cycle
+    parameters:
+      scope: package
+```
+
+退出码：`0` 表示成功，`2` 表示报告已写入但存在达到门槛的 Finding，`64` 表示参数或规则配置无效，`70` 表示扫描、Diagnostic、资源或报告写入失败。完整 YAML 结构、八条规则参数和安全限制见 [S6 Technical Design](docs/technical-design/s6-cli-yaml-and-report-writing.md) 及随 CLI 发布的 `schema/rules-0.1.0.schema.json`。
+
+当前构建验证五个模块、Java/Maven 版本、依赖收敛、禁止依赖、模块方向、`0.1.0` 契约、Java/Maven 静态事实、八条确定性规则、严格 YAML、四类退出码、原子报告写入、资源上限、Evidence 闭合和端到端字节确定性。`scanner-domain` 保持零生产依赖；`scanner-rule-engine` 生产代码只依赖 `scanner-domain`；报告 Schema 由 `scanner-report` 在 [`scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json`](scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json) 发布。Scanner 静态分析 Maven `src/main/java` 和 POM 直接非测试依赖，不执行构建、不下载依赖、不解析传递依赖，也不提供完整类型求解。项目级黄金样例、性能基线和发布证据属于 S7。
 
 ## 许可证
 
