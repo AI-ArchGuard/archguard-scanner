@@ -90,6 +90,7 @@ class S4DeterministicRuleReportTest {
                 result.artifacts(),
                 result.components(),
                 result.dependencies(),
+                result.metrics(),
                 result.evidences());
     }
 
@@ -99,7 +100,7 @@ class S4DeterministicRuleReportTest {
                 result.artifacts(),
                 result.components(),
                 result.dependencies(),
-                List.of(),
+                result.metrics(),
                 findings,
                 result.evidences());
     }

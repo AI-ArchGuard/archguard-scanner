@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aiarchguard.scanner.domain.model.Component;
+import io.github.aiarchguard.scanner.domain.model.ComponentKind;
 import io.github.aiarchguard.scanner.domain.model.DependencyKind;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -27,6 +28,177 @@ class JavaSourceScannerTest {
     private final JavaSourceScanner scanner = new JavaSourceScanner();
 
     @Test
+    void extractsFunctionsQualifiedAnnotationsDeclarationEvidenceAndComplexity(@TempDir Path repository)
+            throws IOException {
+        Path source = repository.resolve("src/main/java/example");
+        Files.createDirectories(source);
+        Files.writeString(repository.resolve("pom.xml"), """
+                <project>
+                  <groupId>example</groupId><artifactId>metrics</artifactId><version>1.0.0</version>
+                </project>
+                """);
+        Files.writeString(source.resolve("Demo.java"), """
+                package example;
+                import org.springframework.web.bind.annotation.RestController;
+                import javax.annotation.processing.Generated;
+                @RestController
+                class Demo {
+                    Demo() {}
+                    int complex(boolean left, boolean right) {
+                        if (left && right) { for (int i = 0; i < 1; i++) { } }
+                        return left ? 1 : 0;
+                    }
+                    @Generated void generated() { if (true) { } }
+                }
+                @Generated class GeneratedType { void method() { if (true) { } } }
+                """);
+
+        JavaScanResult result = scanner.scan(JavaScanRequest.forSchema010(repository, "metrics", "Metrics"));
+
+        Map<String, Component> byName = result.components().stream()
+                .collect(Collectors.toMap(Component::qualifiedName, Function.identity()));
+        Component type = byName.get("example.Demo");
+        Component method = byName.get("example.Demo#complex(boolean,boolean)");
+        Component generated = byName.get("example.Demo#generated()");
+        Component generatedType = byName.get("example.GeneratedType");
+        Component generatedTypeMethod = byName.get("example.GeneratedType#method()");
+        assertEquals(ComponentKind.TYPE, type.kind());
+        assertEquals(ComponentKind.FUNCTION, method.kind());
+        assertEquals(
+                List.of("org.springframework.web.bind.annotation.RestController"),
+                type.extensions().get("java.annotations"));
+        assertEquals(List.of("true"), generated.extensions().get("java.generated"));
+        assertTrue(result.evidences().stream()
+                .anyMatch(evidence -> evidence.id().equals(
+                        method.extensions().get("archguard.declaration-evidence-id").getFirst())));
+        assertEquals(5, result.metrics().stream()
+                .filter(metric -> metric.scopeId().equals(method.id()))
+                .findFirst()
+                .orElseThrow()
+                .value()
+                .intValueExact());
+        assertTrue(result.metrics().stream().noneMatch(metric -> metric.scopeId().equals(generated.id())));
+        assertTrue(result.metrics().stream().noneMatch(metric ->
+                metric.scopeId().equals(generatedType.id()) || metric.scopeId().equals(generatedTypeMethod.id())));
+        assertTrue(result.diagnostics().isEmpty());
+    }
+
+    @Test
+    void modelsOnlyDirectNonTestMavenDependencies(@TempDir Path repository) throws IOException {
+        Path source = repository.resolve("src/main/java/example");
+        Files.createDirectories(source);
+        Files.writeString(source.resolve("App.java"), "package example; class App {}");
+        Files.writeString(repository.resolve("pom.xml"), """
+                <project>
+                  <groupId>example</groupId><artifactId>app</artifactId><version>1.0.0</version>
+                  <properties><lib.version>1.2.3</lib.version></properties>
+                  <dependencyManagement><dependencies><dependency>
+                    <groupId>org.managed</groupId><artifactId>ignored</artifactId><version>9</version>
+                  </dependency></dependencies></dependencyManagement>
+                  <dependencies>
+                    <dependency><groupId>org.demo</groupId><artifactId>lib</artifactId><version>${lib.version}</version></dependency>
+                    <dependency><groupId>org.test</groupId><artifactId>ignored</artifactId><version>1</version><scope>test</scope></dependency>
+                  </dependencies>
+                </project>
+                """);
+
+        JavaScanResult result = scanner.scan(JavaScanRequest.forSchema010(repository, "maven", "Maven"));
+
+        assertEquals(
+                Set.of("example:app:1.0.0", "org.demo:lib:1.2.3"),
+                result.artifacts().stream()
+                        .map(artifact -> artifact.extensions().get("maven.coordinate"))
+                        .filter(java.util.Objects::nonNull)
+                        .map(List::getFirst)
+                        .collect(Collectors.toSet()));
+        assertEquals(1, result.dependencies().stream()
+                .filter(dependency -> dependency.extensions().containsKey("maven.scope"))
+                .count());
+        assertTrue(result.evidences().stream().anyMatch(evidence ->
+                evidence.summary().contains("org.demo:lib:1.2.3")
+                        && evidence.location().path().equals("pom.xml")));
+        assertTrue(result.diagnostics().isEmpty());
+    }
+
+    @Test
+    void rejectsUnsafePomAndDoesNotGuessUnresolvedDependency(@TempDir Path temporaryDirectory) throws IOException {
+        Path unsafe = temporaryDirectory.resolve("unsafe");
+        Path unsafeSource = unsafe.resolve("src/main/java/example");
+        Files.createDirectories(unsafeSource);
+        Files.writeString(unsafeSource.resolve("App.java"), "package example; class App {}");
+        Files.writeString(unsafe.resolve("pom.xml"), """
+                <!DOCTYPE project [<!ENTITY secret SYSTEM "file:///etc/passwd">]>
+                <project><groupId>example</groupId><artifactId>unsafe</artifactId><version>&secret;</version></project>
+                """);
+        JavaScanResult unsafeResult =
+                scanner.scan(JavaScanRequest.forSchema010(unsafe, "unsafe", "Unsafe"));
+        assertTrue(unsafeResult.diagnostics().stream()
+                .anyMatch(diagnostic -> "maven.pom.invalid".equals(diagnostic.code())));
+
+        Path unresolved = temporaryDirectory.resolve("unresolved");
+        Path unresolvedSource = unresolved.resolve("src/main/java/example");
+        Files.createDirectories(unresolvedSource);
+        Files.writeString(unresolvedSource.resolve("App.java"), "package example; class App {}");
+        Files.writeString(unresolved.resolve("pom.xml"), """
+                <project>
+                  <groupId>example</groupId><artifactId>unresolved</artifactId><version>1</version>
+                  <properties><cycle.a>${cycle.b}</cycle.a><cycle.b>${cycle.a}</cycle.b></properties>
+                  <dependencies><dependency>
+                    <groupId>${cycle.a}</groupId><artifactId>unknown</artifactId>
+                  </dependency></dependencies>
+                </project>
+                """);
+        JavaScanResult unresolvedResult =
+                scanner.scan(JavaScanRequest.forSchema010(unresolved, "unresolved", "Unresolved"));
+        assertTrue(unresolvedResult.diagnostics().stream()
+                .anyMatch(diagnostic -> "maven.dependency.unresolved".equals(diagnostic.code())));
+        assertTrue(unresolvedResult.artifacts().stream()
+                .noneMatch(artifact -> artifact.extensions().containsKey("maven.external")));
+    }
+
+    @Test
+    void resolvesRepositoryLocalParentPropertiesAndRejectsEscapingParent(@TempDir Path repository)
+            throws IOException {
+        Files.writeString(repository.resolve("pom.xml"), """
+                <project>
+                  <groupId>example</groupId><artifactId>parent</artifactId><version>1</version>
+                  <properties><shared.version>3.4.5</shared.version></properties>
+                </project>
+                """);
+        Path childSource = repository.resolve("child/src/main/java/example");
+        Files.createDirectories(childSource);
+        Files.writeString(childSource.resolve("Child.java"), "package example; class Child {}");
+        Files.writeString(repository.resolve("child/pom.xml"), """
+                <project>
+                  <parent><groupId>example</groupId><artifactId>parent</artifactId><version>1</version></parent>
+                  <artifactId>child</artifactId>
+                  <dependencies><dependency>
+                    <groupId>org.shared</groupId><artifactId>library</artifactId><version>${shared.version}</version>
+                  </dependency></dependencies>
+                </project>
+                """);
+        Path escapeSource = repository.resolve("escape/src/main/java/example");
+        Files.createDirectories(escapeSource);
+        Files.writeString(escapeSource.resolve("Escape.java"), "package example; class Escape {}");
+        Files.writeString(repository.resolve("escape/pom.xml"), """
+                <project>
+                  <parent>
+                    <groupId>example</groupId><artifactId>outside</artifactId><version>1</version>
+                    <relativePath>../../outside/pom.xml</relativePath>
+                  </parent>
+                  <artifactId>escape</artifactId>
+                </project>
+                """);
+
+        JavaScanResult result = scanner.scan(JavaScanRequest.forSchema010(repository, "parent", "Parent"));
+
+        assertTrue(result.artifacts().stream().anyMatch(artifact ->
+                List.of("org.shared:library:3.4.5").equals(artifact.extensions().get("maven.coordinate"))));
+        assertTrue(result.diagnostics().stream()
+                .anyMatch(diagnostic -> "maven.parent.outside-root".equals(diagnostic.code())));
+    }
+
+    @Test
     void extractsTypesRelationsReferencesAndSafeEvidence() {
         JavaScanResult result = scanner.scan(request("single-module"));
 
@@ -34,6 +206,7 @@ class JavaSourceScannerTest {
                 .map(artifact -> artifact.repositoryPath())
                 .collect(Collectors.toSet()));
         Map<String, Component> components = result.components().stream()
+                .filter(component -> component.kind() == io.github.aiarchguard.scanner.domain.model.ComponentKind.TYPE)
                 .collect(Collectors.toMap(Component::qualifiedName, Function.identity()));
         assertEquals(
                 Set.of(
@@ -173,7 +346,11 @@ class JavaSourceScannerTest {
 
         assertEquals(
                 Set.of("example.target.TargetPackage"),
-                result.components().stream().map(Component::qualifiedName).collect(Collectors.toSet()));
+                result.components().stream()
+                        .filter(component -> component.kind()
+                                == io.github.aiarchguard.scanner.domain.model.ComponentKind.TYPE)
+                        .map(Component::qualifiedName)
+                        .collect(Collectors.toSet()));
         assertTrue(result.diagnostics().isEmpty());
     }
 

@@ -11,6 +11,11 @@ public final class StructureRuleEngine {
     private final IllegalPackageDependencyRule illegalPackageDependencyRule = new IllegalPackageDependencyRule();
     private final LayeredArchitectureRule layeredArchitectureRule = new LayeredArchitectureRule();
     private final DependencyCycleRule dependencyCycleRule = new DependencyCycleRule();
+    private final ControllerRepositoryAccessRule controllerRepositoryAccessRule = new ControllerRepositoryAccessRule();
+    private final InternalModuleAccessRule internalModuleAccessRule = new InternalModuleAccessRule();
+    private final ForbiddenComponentRule forbiddenComponentRule = new ForbiddenComponentRule();
+    private final ComplexityThresholdRule complexityThresholdRule = new ComplexityThresholdRule();
+    private final RequiredAnnotationRule requiredAnnotationRule = new RequiredAnnotationRule();
 
     public RuleEngineResult execute(
             RuleInput input,
@@ -30,6 +35,7 @@ public final class StructureRuleEngine {
         DependencyGraph.create(input.components(), input.dependencies(), limits);
 
         List<Finding> findings = new ArrayList<>();
+        List<RuleDiagnostic> diagnostics = new ArrayList<>();
         configurations.stream()
                 .sorted((left, right) -> left.rule().id().compareTo(right.rule().id()))
                 .forEach(configuration -> {
@@ -41,6 +47,28 @@ public final class StructureRuleEngine {
                             layeredArchitectureRule.evaluate(input, value, remainingFindings);
                         case DependencyCycleConfig value ->
                             dependencyCycleRule.evaluate(input, value, remainingFindings);
+                        case ControllerRepositoryAccessConfig value ->
+                            controllerRepositoryAccessRule.evaluate(input, value, remainingFindings);
+                        case InternalModuleAccessConfig value -> {
+                            InternalModuleAccessRule.Evaluation evaluation =
+                                    internalModuleAccessRule.evaluate(input, value, remainingFindings);
+                            diagnostics.addAll(evaluation.diagnostics());
+                            yield evaluation.findings();
+                        }
+                        case ForbiddenComponentConfig value -> {
+                            ForbiddenComponentRule.Evaluation evaluation =
+                                    forbiddenComponentRule.evaluate(input, value, remainingFindings);
+                            diagnostics.addAll(evaluation.diagnostics());
+                            yield evaluation.findings();
+                        }
+                        case ComplexityThresholdConfig value ->
+                            complexityThresholdRule.evaluate(input, value, remainingFindings);
+                        case RequiredAnnotationConfig value -> {
+                            RequiredAnnotationRule.Evaluation evaluation =
+                                    requiredAnnotationRule.evaluate(input, value, remainingFindings);
+                            diagnostics.addAll(evaluation.diagnostics());
+                            yield evaluation.findings();
+                        }
                     };
                     if (findings.size() > limits.maxFindings() - produced.size()) {
                         throw new RuleEngineException(
@@ -48,6 +76,6 @@ public final class StructureRuleEngine {
                     }
                     findings.addAll(produced);
                 });
-        return new RuleEngineResult(findings);
+        return new RuleEngineResult(findings, diagnostics);
     }
 }

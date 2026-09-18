@@ -22,6 +22,10 @@ final class DependencyCycleRule {
         };
         Map<String, String> labels = new LinkedHashMap<>();
         for (Component component : input.components()) {
+            if (config.scope() == CycleScope.PACKAGE
+                    && ComponentFacts.optionalPackageName(component).isEmpty()) {
+                continue;
+            }
             String node = classifier.apply(component);
             String label = switch (config.scope()) {
                 case COMPONENT -> component.qualifiedName();
@@ -33,8 +37,15 @@ final class DependencyCycleRule {
 
         List<DirectedGraphView.Edge> edges = new ArrayList<>();
         for (Dependency dependency : input.dependencies()) {
-            String source = classifier.apply(components.get(dependency.sourceId()));
-            String target = classifier.apply(components.get(dependency.targetId()));
+            Component sourceComponent = components.get(dependency.sourceId());
+            Component targetComponent = components.get(dependency.targetId());
+            if (config.scope() == CycleScope.PACKAGE
+                    && (ComponentFacts.optionalPackageName(sourceComponent).isEmpty()
+                            || ComponentFacts.optionalPackageName(targetComponent).isEmpty())) {
+                continue;
+            }
+            String source = classifier.apply(sourceComponent);
+            String target = classifier.apply(targetComponent);
             if (config.scope() != CycleScope.COMPONENT && source.equals(target)) {
                 continue;
             }
