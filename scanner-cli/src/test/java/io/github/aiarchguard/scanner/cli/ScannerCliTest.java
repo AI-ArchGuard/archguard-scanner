@@ -218,6 +218,32 @@ class ScannerCliTest {
         assertEquals(ScannerCli.VERSION + System.lineSeparator(), version.stdout());
     }
 
+    @Test
+    void validatesRulesWithoutScanningARepository() throws Exception {
+        Path rules = writeRules("archguard.dependency-cycle", "scope: component", "high");
+
+        Invocation invocation = invoke(new String[] {"validate-rules", rules.toString()});
+
+        assertEquals(CliExitCode.SUCCESS.value(), invocation.exitCode());
+        assertEquals("ArchGuard rules valid: version=0.1.0 rules=1" + System.lineSeparator(), invocation.stdout());
+        assertEquals("", invocation.stderr());
+    }
+
+    @Test
+    void rejectsInvalidRulesThroughTheValidationCommand() throws Exception {
+        Path invalidRules = temporaryDirectory.resolve("invalid-rules.yaml");
+        Files.writeString(invalidRules, "version: 0.1.0\nunknown: true\n");
+
+        Invocation invalid = invoke(new String[] {"validate-rules", invalidRules.toString()});
+        Invocation missing = invoke(new String[] {"validate-rules"});
+
+        assertEquals(CliExitCode.INVALID_INPUT.value(), invalid.exitCode());
+        assertTrue(invalid.stderr().startsWith("ERROR config.schema.invalid "));
+        assertFalse(invalid.stderr().contains(temporaryDirectory.toString()));
+        assertEquals(CliExitCode.INVALID_INPUT.value(), missing.exitCode());
+        assertTrue(missing.stderr().contains(ScannerCli.VALIDATE_RULES_USAGE));
+    }
+
     private Path writeRules(String id, String parameters, String failOn) throws Exception {
         Path rules = temporaryDirectory.resolve("rules-" + Math.abs(id.hashCode()) + ".yaml");
         Files.writeString(

@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- 增加 `validate-rules <rules.yaml>` 命令，供 Platform 在保存 RuleSetVersion 前复用 Scanner 的严格 YAML 和强类型配置校验。
+
+### Changed
+
+- 将候选版本提升为 `0.2.1`；Scanner Result Schema 和 Rules Schema 均保持 `0.1.0`。
+
 ## [0.2.0] - 2026-09-19
 
 ### Added
