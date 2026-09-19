@@ -44,3 +44,17 @@ jobs:
         run: |
           chmod +x ./mvnw
           ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Checkout accepted S7 samples
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: AI-ArchGuard/archguard-samples
+          ref: 7b93248bf67619a6b26c1d428bcf92d1fe3a781b
+          path: s7-samples
+      - name: Verify golden samples, repeatability, and performance bounds
+        run: |
+          python3 s7-samples/scripts/verify_samples.py s7-samples
+          python3 s7-samples/scripts/verify_with_scanner.py \
+            --jar scanner-cli/target/archguard-scanner.jar \
+            --samples s7-samples \
+            --results target/s7-results.json
+          cat target/s7-results.json

@@ -32,6 +32,7 @@ class RuleConfigurationLoaderTest {
         assertEquals("Example Application", configuration.projectName());
         assertEquals(Severity.CRITICAL, configuration.failOn());
         assertEquals(1234, configuration.scanLimits().maxFiles());
+        assertEquals(45, configuration.maxDurationSeconds());
         assertEquals(4096, configuration.maxOutputBytes());
         assertEquals(8, configuration.rules().size());
         List<Class<?>> types = configuration.rules().stream().map(Object::getClass).toList();
@@ -54,6 +55,7 @@ class RuleConfigurationLoaderTest {
         assertEquals(Severity.HIGH, configuration.failOn());
         assertEquals(Severity.HIGH, configuration.rules().getFirst().severity());
         assertEquals(10_000, configuration.scanLimits().maxFiles());
+        assertEquals(300, configuration.maxDurationSeconds());
         assertEquals(50L * 1024 * 1024, configuration.maxOutputBytes());
     }
 
@@ -121,6 +123,8 @@ class RuleConfigurationLoaderTest {
                 "rules:", "failOn: info\nrules:"));
         assertInvalid(minimalConfiguration("archguard.dependency-cycle", "scope: package").replace(
                 "rules:", "limits: {maxDepth: 3}\nrules:"));
+        assertInvalid(minimalConfiguration("archguard.dependency-cycle", "scope: package").replace(
+                "rules:", "limits: {maxDurationSeconds: 0}\nrules:"));
         assertInvalid(minimalConfiguration(
                 "archguard.illegal-package-dependency",
                 """
@@ -187,6 +191,7 @@ class RuleConfigurationLoaderTest {
                   maxNodes: 2000
                   maxEdges: 3000
                   maxFindings: 400
+                  maxDurationSeconds: 45
                   maxOutputBytes: 4096
                 rules:
                   - id: archguard.illegal-package-dependency

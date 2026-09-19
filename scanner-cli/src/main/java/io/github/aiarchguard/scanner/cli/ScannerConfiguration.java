@@ -15,9 +15,11 @@ record ScannerConfiguration(
         Severity failOn,
         JavaScanLimits scanLimits,
         RuleExecutionLimits ruleLimits,
+        int maxDurationSeconds,
         long maxOutputBytes,
         List<StructureRuleConfiguration> rules) {
 
+    static final int DEFAULT_MAX_DURATION_SECONDS = 300;
     static final long DEFAULT_MAX_OUTPUT_BYTES = 50L * 1024 * 1024;
 
     ScannerConfiguration {
@@ -26,6 +28,9 @@ record ScannerConfiguration(
         }
         if (failOn == null || scanLimits == null || ruleLimits == null) {
             throw new IllegalArgumentException("configuration values must not be null");
+        }
+        if (maxDurationSeconds < 1 || maxDurationSeconds > 3600) {
+            throw new IllegalArgumentException("maxDurationSeconds must be between 1 and 3600");
         }
         if (maxOutputBytes < 1024 || maxOutputBytes > 100L * 1024 * 1024) {
             throw new IllegalArgumentException("maxOutputBytes must be between 1024 and 104857600");

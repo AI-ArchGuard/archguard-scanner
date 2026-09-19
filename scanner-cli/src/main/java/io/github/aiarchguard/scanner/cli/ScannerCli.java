@@ -17,6 +17,7 @@ import io.github.aiarchguard.scanner.rule.RuleInput;
 import io.github.aiarchguard.scanner.rule.StructureRuleEngine;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -24,13 +25,14 @@ import java.util.Locale;
 public final class ScannerCli {
 
     static final String USAGE = "Usage: archguard scan <repository> --rules <rules.yaml> --output <report.json>";
-    static final String VERSION = "0.2.0-SNAPSHOT";
+    static final String VERSION = "0.2.0";
 
     private final RuleConfigurationLoader configurationLoader;
     private final JavaSourceScanner sourceScanner;
     private final StructureRuleEngine ruleEngine;
     private final ReportJson reportJson;
     private final ReportWriter reportWriter;
+    private final TimedAnalysisRunner timedAnalysisRunner;
 
     public ScannerCli() {
         this(
@@ -38,7 +40,8 @@ public final class ScannerCli {
                 new JavaSourceScanner(),
                 new StructureRuleEngine(),
                 new ReportJson(),
-                new ReportWriter());
+                new ReportWriter(),
+                new TimedAnalysisRunner());
     }
 
     ScannerCli(
@@ -47,11 +50,22 @@ public final class ScannerCli {
             StructureRuleEngine ruleEngine,
             ReportJson reportJson,
             ReportWriter reportWriter) {
+        this(configurationLoader, sourceScanner, ruleEngine, reportJson, reportWriter, new TimedAnalysisRunner());
+    }
+
+    ScannerCli(
+            RuleConfigurationLoader configurationLoader,
+            JavaSourceScanner sourceScanner,
+            StructureRuleEngine ruleEngine,
+            ReportJson reportJson,
+            ReportWriter reportWriter,
+            TimedAnalysisRunner timedAnalysisRunner) {
         this.configurationLoader = configurationLoader;
         this.sourceScanner = sourceScanner;
         this.ruleEngine = ruleEngine;
         this.reportJson = reportJson;
         this.reportWriter = reportWriter;
+        this.timedAnalysisRunner = timedAnalysisRunner;
     }
 
     public int run(String[] arguments, PrintStream standardOutput, PrintStream standardError) {
@@ -86,47 +100,28 @@ public final class ScannerCli {
         }
 
         try {
-            JavaScanResult scan = sourceScanner.scan(new JavaScanRequest(
-                    parsed.repository(),
-                    configuration.projectIdentity(),
-                    configuration.projectName(),
-                    "0.1.0",
-                    configuration.scanLimits()));
-            RuleInput input = new RuleInput(
-                    "0.1.0",
-                    scan.project(),
-                    scan.artifacts(),
-                    scan.components(),
-                    scan.dependencies(),
-                    scan.metrics(),
-                    scan.evidences());
-            RuleEngineResult evaluated = ruleEngine.execute(input, configuration.rules(), configuration.ruleLimits());
-            DomainReport report = new DomainReport(
-                    scan.project(),
-                    scan.artifacts(),
-                    scan.components(),
-                    scan.dependencies(),
-                    scan.metrics(),
-                    evaluated.findings(),
-                    scan.evidences());
-            byte[] json = reportJson.serialize(report);
-            if (json.length > configuration.maxOutputBytes()) {
+            ScanOutput output = timedAnalysisRunner.run(
+                    () -> analyze(parsed, configuration), Duration.ofSeconds(configuration.maxDurationSeconds()));
+            if (output.json().length > configuration.maxOutputBytes()) {
                 standardError.println("ERROR report.limit.bytes report exceeds the configured output limit");
                 return CliExitCode.SCAN_FAILURE.value();
             }
-            reportWriter.write(parsed.output(), json);
-            renderDiagnostics(scan.diagnostics(), evaluated.diagnostics(), standardError);
+            reportWriter.write(parsed.output(), output.json());
+            renderDiagnostics(output.scan().diagnostics(), output.evaluated().diagnostics(), standardError);
             standardOutput.printf(
                     Locale.ROOT,
                     "ArchGuard scan complete: findings=%d diagnostics=%d%n",
-                    evaluated.findings().size(),
-                    scan.diagnostics().size() + evaluated.diagnostics().size());
-            if (!scan.diagnostics().isEmpty() || !evaluated.diagnostics().isEmpty()) {
+                    output.evaluated().findings().size(),
+                    output.scan().diagnostics().size() + output.evaluated().diagnostics().size());
+            if (!output.scan().diagnostics().isEmpty() || !output.evaluated().diagnostics().isEmpty()) {
                 return CliExitCode.SCAN_FAILURE.value();
             }
-            return hasBlockingFinding(evaluated.findings(), configuration)
+            return hasBlockingFinding(output.evaluated().findings(), configuration)
                     ? CliExitCode.POLICY_VIOLATION.value()
                     : CliExitCode.SUCCESS.value();
+        } catch (ScanTimeoutException exception) {
+            standardError.println("ERROR scanner.limit.duration " + exception.getMessage());
+            return CliExitCode.SCAN_FAILURE.value();
         } catch (JavaScanException exception) {
             standardError.println("ERROR " + exception.code() + " " + exception.getMessage());
             return isInvalidRepositoryInput(exception.code())
@@ -145,6 +140,33 @@ public final class ScannerCli {
             standardError.println("ERROR scanner.internal scanner failed without exposing host details");
             return CliExitCode.SCAN_FAILURE.value();
         }
+    }
+
+    private ScanOutput analyze(CliArguments parsed, ScannerConfiguration configuration) {
+        JavaScanResult scan = sourceScanner.scan(new JavaScanRequest(
+                parsed.repository(),
+                configuration.projectIdentity(),
+                configuration.projectName(),
+                "0.1.0",
+                configuration.scanLimits()));
+        RuleInput input = new RuleInput(
+                "0.1.0",
+                scan.project(),
+                scan.artifacts(),
+                scan.components(),
+                scan.dependencies(),
+                scan.metrics(),
+                scan.evidences());
+        RuleEngineResult evaluated = ruleEngine.execute(input, configuration.rules(), configuration.ruleLimits());
+        DomainReport report = new DomainReport(
+                scan.project(),
+                scan.artifacts(),
+                scan.components(),
+                scan.dependencies(),
+                scan.metrics(),
+                evaluated.findings(),
+                scan.evidences());
+        return new ScanOutput(scan, evaluated, reportJson.serialize(report));
     }
 
     private static boolean hasBlockingFinding(List<Finding> findings, ScannerConfiguration configuration) {
@@ -181,4 +203,6 @@ public final class ScannerCli {
         String message = exception.getMessage();
         return message == null || message.isBlank() ? "invalid command line" : message;
     }
+
+    private record ScanOutput(JavaScanResult scan, RuleEngineResult evaluated, byte[] json) {}
 }
