@@ -3,6 +3,7 @@ package io.github.aiarchguard.scanner.cli;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aiarchguard.scanner.report.ReportJson;
@@ -11,6 +12,8 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -141,6 +144,57 @@ class ScannerCliTest {
     }
 
     @Test
+    void returnsScanFailureWithoutReplacingAReportWhenDurationLimitIsExceeded() throws Exception {
+        Path rules = writeRules("archguard.dependency-cycle", "scope: component", "high");
+        Path report = temporaryDirectory.resolve("timeout.json");
+        Files.writeString(report, "existing-report");
+        TimedAnalysisRunner timeoutRunner = new TimedAnalysisRunner() {
+            @Override
+            <T> T run(java.util.function.Supplier<T> analysis, Duration timeout) {
+                throw new ScanTimeoutException();
+            }
+        };
+
+        Invocation invocation = invoke(
+                new ScannerCli(
+                        new RuleConfigurationLoader(),
+                        new io.github.aiarchguard.scanner.parser.java.JavaSourceScanner(),
+                        new io.github.aiarchguard.scanner.rule.StructureRuleEngine(),
+                        new ReportJson(),
+                        new io.github.aiarchguard.scanner.report.ReportWriter(),
+                        timeoutRunner),
+                repository,
+                rules,
+                report);
+
+        assertEquals(CliExitCode.SCAN_FAILURE.value(), invocation.exitCode());
+        assertTrue(invocation.stderr().contains("scanner.limit.duration"));
+        assertEquals("existing-report", Files.readString(report));
+    }
+
+    @Test
+    void timedRunnerCancelsWorkAtTheConfiguredDeadline() throws Exception {
+        CountDownLatch interrupted = new CountDownLatch(1);
+
+        ScanTimeoutException exception = assertThrows(
+                ScanTimeoutException.class,
+                () -> new TimedAnalysisRunner().run(
+                        () -> {
+                            try {
+                                Thread.sleep(30_000);
+                            } catch (InterruptedException interruptedException) {
+                                interrupted.countDown();
+                                Thread.currentThread().interrupt();
+                            }
+                            return "late";
+                        },
+                        Duration.ofMillis(200)));
+
+        assertEquals("scan exceeded configured duration", exception.getMessage());
+        assertTrue(interrupted.await(2, java.util.concurrent.TimeUnit.SECONDS));
+    }
+
+    @Test
     void writesPartialReportAndReturnsScanFailureForStableDiagnostics() throws Exception {
         Files.writeString(
                 repository.resolve("src/main/java/example/web/Controller.java"),
@@ -183,15 +237,23 @@ class ScannerCliTest {
     }
 
     private Invocation invoke(Path root, Path rules, Path output) {
-        return invoke(new String[] {
+        return invoke(new ScannerCli(), root, rules, output);
+    }
+
+    private Invocation invoke(ScannerCli scannerCli, Path root, Path rules, Path output) {
+        return invoke(scannerCli, new String[] {
             "scan", root.toString(), "--rules", rules.toString(), "--output", output.toString()
         });
     }
 
     private Invocation invoke(String[] arguments) {
+        return invoke(new ScannerCli(), arguments);
+    }
+
+    private Invocation invoke(ScannerCli scannerCli, String[] arguments) {
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        int exit = new ScannerCli().run(
+        int exit = scannerCli.run(
                 arguments,
                 new PrintStream(stdout, true, StandardCharsets.UTF_8),
                 new PrintStream(stderr, true, StandardCharsets.UTF_8));

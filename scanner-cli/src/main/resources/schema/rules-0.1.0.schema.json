@@ -28,6 +28,7 @@
         "maxNodes": { "type": "integer", "minimum": 1, "maximum": 100000 },
         "maxEdges": { "type": "integer", "minimum": 1, "maximum": 1000000 },
         "maxFindings": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxDurationSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
         "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 104857600 }
       }
     },

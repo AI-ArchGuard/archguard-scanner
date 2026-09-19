@@ -145,6 +145,7 @@ final class RuleConfigurationLoader {
                 severity(root, "failOn", Severity.HIGH),
                 scanLimits,
                 ruleLimits,
+                intValue(limits, "maxDurationSeconds", ScannerConfiguration.DEFAULT_MAX_DURATION_SECONDS),
                 longValue(limits, "maxOutputBytes", ScannerConfiguration.DEFAULT_MAX_OUTPUT_BYTES),
                 rules);
     }

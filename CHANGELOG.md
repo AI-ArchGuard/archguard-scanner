@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-19
+
 ### Added
 
 - 初始化仓库治理、协作和质量基线。
@@ -20,3 +22,5 @@
 - 增加规则 Diagnostic、默认 severity 与允许覆盖边界，并覆盖 Spring 同名注解、模块边界、类型/包/Maven 禁止选择器、复杂度阈值、生成代码、必要注解和 POM 失败关闭测试；`0.1.0` Schema 保持不变且未新增生产依赖。
 - 实现阶段 1 S6：可执行 `scan` CLI、严格且版本化的 YAML 规则配置及参数 Schema、八条规则的强类型映射、稳定 Diagnostic 呈现，以及成功/违规/输入错误/扫描失败四类退出码。
 - 增加输出大小门禁和同目录临时文件原子替换，生成可运行的 shaded JAR，并覆盖配置失败关闭、字节稳定性、Schema、退出码和写入安全测试；Scanner Result `0.1.0` Schema 保持不变。
+- 完成阶段 1 S7：固定 `archguard-samples` 合并提交，验证三个合成项目、三个失败夹具、黄金 SHA-256、三次独立进程字节复现与单次性能上限。
+- 增加可配置总扫描时限、`v0.2.0` release workflow、可执行 JAR 校验和、发布说明和回滚顺序；Scanner Result `0.1.0` Schema 保持不变。
