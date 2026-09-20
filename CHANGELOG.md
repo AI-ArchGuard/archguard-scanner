@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-19
+
 ### Added
 
 - 增加 `validate-rules <rules.yaml>` 命令，供 Platform 在保存 RuleSetVersion 前复用 Scanner 的严格 YAML 和强类型配置校验。
