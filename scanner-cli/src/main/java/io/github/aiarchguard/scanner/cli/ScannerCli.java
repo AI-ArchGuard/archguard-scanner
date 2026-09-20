@@ -24,8 +24,10 @@ import java.util.Locale;
 
 public final class ScannerCli {
 
-    static final String USAGE = "Usage: archguard scan <repository> --rules <rules.yaml> --output <report.json>";
-    static final String VERSION = "0.2.0";
+    static final String SCAN_USAGE = "Usage: archguard scan <repository> --rules <rules.yaml> --output <report.json>";
+    static final String VALIDATE_RULES_USAGE = "Usage: archguard validate-rules <rules.yaml>";
+    static final String USAGE = SCAN_USAGE + System.lineSeparator() + VALIDATE_RULES_USAGE;
+    static final String VERSION = "0.2.1";
 
     private final RuleConfigurationLoader configurationLoader;
     private final JavaSourceScanner sourceScanner;
@@ -79,6 +81,9 @@ public final class ScannerCli {
         if (arguments != null && arguments.length == 1 && "--version".equals(arguments[0])) {
             standardOutput.println(VERSION);
             return CliExitCode.SUCCESS.value();
+        }
+        if (arguments != null && arguments.length > 0 && "validate-rules".equals(arguments[0])) {
+            return validateRules(arguments, standardOutput, standardError);
         }
 
         CliArguments parsed;
@@ -139,6 +144,30 @@ public final class ScannerCli {
         } catch (RuntimeException exception) {
             standardError.println("ERROR scanner.internal scanner failed without exposing host details");
             return CliExitCode.SCAN_FAILURE.value();
+        }
+    }
+
+    private int validateRules(String[] arguments, PrintStream standardOutput, PrintStream standardError) {
+        if (arguments.length != 2 || arguments[1].startsWith("--")) {
+            standardError.println("ERROR cli.input.invalid rules file is required");
+            standardError.println(VALIDATE_RULES_USAGE);
+            return CliExitCode.INVALID_INPUT.value();
+        }
+        try {
+            ScannerConfiguration configuration = configurationLoader.load(java.nio.file.Path.of(arguments[1])
+                    .toAbsolutePath()
+                    .normalize());
+            standardOutput.printf(
+                    Locale.ROOT,
+                    "ArchGuard rules valid: version=0.1.0 rules=%d%n",
+                    configuration.rules().size());
+            return CliExitCode.SUCCESS.value();
+        } catch (IllegalArgumentException exception) {
+            standardError.println("ERROR cli.input.invalid rules path is invalid");
+            return CliExitCode.INVALID_INPUT.value();
+        } catch (ConfigurationException exception) {
+            standardError.println("ERROR " + exception.code() + " " + exception.getMessage());
+            return CliExitCode.INVALID_INPUT.value();
         }
     }
 

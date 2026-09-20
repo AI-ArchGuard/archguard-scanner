@@ -4,7 +4,7 @@ ArchGuard 的确定性代码分析平面。第一版深度扫描 Java，但公�
 
 ## 当前状态
 
-阶段 0 `v0.1.0-foundation` 已关闭，阶段 1 `v0.2.0-scanner` 的 S1–S7 已实现。当前候选版本为 Scanner `0.2.0`、Scanner Result Schema `0.1.0`；最终发布状态以 `v0.2.0` tag、GitHub Release 和 Docs 验收报告为准。阶段规范见 Docs 的 `requirements/scanner-v0.2-feature-spec.md`，实现设计见 [`docs/technical-design/`](docs/technical-design/)。
+阶段 0 与阶段 1 已关闭，Scanner `v0.2.0` 已发布。阶段 2 的向后兼容候选版本为 Scanner `0.2.1`，增加独立 RuleSet 校验命令；Scanner Result Schema 和 Rules Schema 均保持 `0.1.0`。阶段规范见 Docs，具体设计见 [`docs/technical-design/`](docs/technical-design/)。
 
 ## 职责
 
@@ -48,6 +48,12 @@ java -jar scanner-cli/target/archguard-scanner.jar scan ./my-java-project \
   --output ./report.json
 ```
 
+在 Platform 保存 RuleSetVersion 前，可只校验规则文件而不扫描 Repository：
+
+```bash
+java -jar scanner-cli/target/archguard-scanner.jar validate-rules ./rules.yaml
+```
+
 最小规则文件：
 
 ```yaml
@@ -64,7 +70,7 @@ rules:
       scope: package
 ```
 
-退出码：`0` 表示成功，`2` 表示报告已写入但存在达到门槛的 Finding，`64` 表示参数或规则配置无效，`70` 表示扫描、Diagnostic、资源或报告写入失败。完整 YAML 结构、八条规则参数和安全限制见 [S6 Technical Design](docs/technical-design/s6-cli-yaml-and-report-writing.md) 及随 CLI 发布的 `schema/rules-0.1.0.schema.json`。
+退出码：`0` 表示成功，`2` 表示报告已写入但存在达到门槛的 Finding，`64` 表示参数或规则配置无效，`70` 表示扫描、Diagnostic、资源或报告写入失败。`validate-rules` 只返回 `0/64`。完整 YAML 结构、八条规则参数和安全限制见 [S6 Technical Design](docs/technical-design/s6-cli-yaml-and-report-writing.md) 及随 CLI 发布的 `schema/rules-0.1.0.schema.json`。
 
 当前构建验证五个模块、Java/Maven 版本、依赖收敛、禁止依赖、模块方向、`0.1.0` 契约、Java/Maven 静态事实、八条确定性规则、严格 YAML、四类退出码、原子报告写入、资源与总时限、Evidence 闭合和端到端字节确定性。CI 固定 `archguard-samples` 提交 `7b93248bf67619a6b26c1d428bcf92d1fe3a781b`，验证三个项目、三个失败场景、黄金 digest、三次独立进程字节复现及单次 `15s` 上限。`scanner-domain` 保持零生产依赖；`scanner-rule-engine` 生产代码只依赖 `scanner-domain`；报告 Schema 由 `scanner-report` 在 [`scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json`](scanner-report/src/main/resources/schema/scan-result-0.1.0.schema.json) 发布。
 
