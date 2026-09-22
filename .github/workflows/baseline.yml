@@ -61,3 +61,5 @@ jobs:
             --samples target/platform-samples \
             --results target/s7-results.json
           cat target/s7-results.json
+      - name: Build Scanner container image
+        run: docker build --tag archguard/scanner:ci .

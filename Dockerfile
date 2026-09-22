@@ -1,7 +1,7 @@
 FROM maven:3.9.16-eclipse-temurin-21 AS build
 WORKDIR /src
 COPY . .
-RUN ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+RUN mvn --batch-mode --no-transfer-progress -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine
 RUN apk add --no-cache jq tini && addgroup -S archguard && adduser -S -G archguard -u 10001 archguard
